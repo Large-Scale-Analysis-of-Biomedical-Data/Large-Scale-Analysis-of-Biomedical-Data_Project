@@ -1,0 +1,165 @@
+```{r}
+# --- Install and Load Required Packages ---
+required_packages <- c(
+  "readr", "dplyr", "tidyr", "ggplot2", "ggpubr", 
+  "broom", "purrr", "ggrepel"
+)
+new_packages <- required_packages[!(required_packages %in% installed.packages()[, "Package"])]
+if (length(new_packages)) install.packages(new_packages)
+lapply(required_packages, library, character.only = TRUE)
+
+# --- Load and Preprocess Data ---
+# Load genera counts
+genera_counts_path <- "/Users/laurens/Desktop/School/UGent/Master 1/Large scale analysis/group project/genera.counts.tsv"
+genera_data <- read_tsv(genera_counts_path)
+
+# Load metadata
+metadata_path <- "/Users/laurens/Desktop/School/UGent/Master 1/Large scale analysis/group project/metadata.tsv"
+metadata <- read_tsv(metadata_path)
+
+# Load dataset
+df <- read.table(file_path1, sep = "\t", header = TRUE, check.names = FALSE)
+
+# Function to extract only the genus from column names
+extract_genus <- function(colname) {
+  if (grepl("g__", colname)) {
+    genus <- sub(".*g__([A-Za-z0-9_-]+).*", "\\1", colname)
+    return(genus)
+  } else if (colname == "Sample") { 
+    return("Sample") # Leave 'Sample' unchanged
+  } else {
+    return(colname)
+  }
+}
+
+# Adjust column names
+colnames(df) <- sapply(colnames(df), extract_genus)
+
+# Save the result with write_tsv()
+write_tsv(as_tibble(df), "genera_only_counts.tsv")
+
+# Load the modified data
+genera_data <- read_tsv("genera_only_counts.tsv")
+
+# Transform genera data to long format
+long_format_data <- genera_data %>%
+  pivot_longer(cols = -Sample, names_to = "Bacterial_Group", values_to = "Count")
+write_tsv(long_format_data, "genera_counts_long_format.tsv")
+
+# Optimize metadata by selecting relevant columns
+optimized_metadata <- metadata %>%
+  select(Sample, Study.Group)
+write_tsv(optimized_metadata, "metadata_optimized.tsv")
+
+# --- Data Cleaning ---
+# Remove missing values
+long_format_data_clean <- na.omit(long_format_data)
+optimized_metadata_clean <- na.omit(optimized_metadata)
+write_tsv(long_format_data_clean, "long_format_data_clean.tsv")
+write_tsv(optimized_metadata_clean, "optimized_metadata_clean.tsv")
+
+# --- Normalization ---
+# Normalize counts to relative abundances
+long_format_data_clean_normalized <- long_format_data_clean %>%
+  group_by(Sample) %>%
+  mutate(Relative_Abundance = Count / sum(Count, na.rm = TRUE)) %>%
+  ungroup()
+write_tsv(long_format_data_clean_normalized, "long_format_data_clean_normalized.tsv")
+
+# --- Merge Datasets ---
+merged_data <- long_format_data_clean_normalized %>%
+  inner_join(optimized_metadata_clean, by = "Sample")
+
+# --- Statistical Analysis ---
+# Filter relevant groups (UC, CD, nonIBD)
+data_filtered <- merged_data %>%
+  filter(Study.Group %in% c("UC", "CD", "nonIBD"))
+
+# Compute t-test-based fold-change, p-values, and significance
+t_test_results <- data_filtered %>%
+  group_by(Bacterial_Group) %>%
+  summarise(
+    mean_UC_CD = mean(Relative_Abundance[Study.Group %in% c("UC", "CD")], na.rm = TRUE),
+    mean_nonIBD = mean(Relative_Abundance[Study.Group == "nonIBD"], na.rm = TRUE),
+    log2_fold_change = log2((mean_UC_CD + 1e-6) / (mean_nonIBD + 1e-6)),
+    p_value = t.test(Relative_Abundance[Study.Group %in% c("UC", "CD")],
+                     Relative_Abundance[Study.Group == "nonIBD"])$p.value
+  ) %>%
+  mutate(
+    adjusted_p_value = p.adjust(p_value, method = "BH"),
+    significance = ifelse(adjusted_p_value < 0.05 & abs(log2_fold_change) > 1, "Significant", "Not Significant"),
+    label = ifelse(significance == "Significant", Bacterial_Group, NA)
+  )
+
+# Compute Kruskal-Wallis-based p-values and significance
+kruskal_results <- data_filtered %>%
+  group_by(Bacterial_Group) %>%
+  summarise(
+    log2_fold_change = log2(
+      (mean(Relative_Abundance[Study.Group %in% c("UC", "CD")], na.rm = TRUE) + 1e-6) /
+        (mean(Relative_Abundance[Study.Group == "nonIBD"], na.rm = TRUE) + 1e-6)
+    ),
+    p_value = kruskal.test(Relative_Abundance ~ Study.Group)$p.value
+  ) %>%
+  mutate(
+    adjusted_p_value = p.adjust(p_value, method = "BH"),
+    significance = ifelse(adjusted_p_value < 0.05 & abs(log2_fold_change) > 1, "Significant", "Not Significant")
+  )
+
+# --- Volcano Plot (t-test) ---
+volcano_plot_t_test <- ggplot(t_test_results, aes(x = log2_fold_change, y = -log10(adjusted_p_value), color = significance)) +
+  geom_point(alpha = 0.8, size = 3) +
+  scale_color_manual(values = c("Significant" = "red", "Not Significant" = "gray")) +
+  geom_text_repel(aes(label = label), size = 3, box.padding = 0.3, point.padding = 0.3, segment.color = "grey50") +
+  theme_minimal() +
+  labs(
+    title = "Volcano Plot (T-test): Differential Expression of Bacterial Groups",
+    x = "Log2 Fold Change (UC/CD vs nonIBD)",
+    y = "-Log10(Adjusted p-value)",
+    color = "Significance"
+  )
+print(volcano_plot_t_test)
+
+# --- Volcano Plot (Kruskal-Wallis) ---
+volcano_plot_kruskal <- ggplot(kruskal_results, aes(x = log2_fold_change, y = -log10(adjusted_p_value), color = significance)) +
+  geom_point(alpha = 0.8, size = 3) +
+  scale_color_manual(values = c("Significant" = "blue", "Not Significant" = "gray")) +
+  theme_minimal() +
+  labs(
+    title = "Volcano Plot (Kruskal-Wallis): Differential Expression of Bacterial Groups",
+    x = "Log2 Fold Change (UC/CD vs nonIBD)",
+    y = "-Log10(Adjusted p-value)",
+    color = "Significance"
+  )
+print(volcano_plot_kruskal)
+
+# --- Identify Top 10 Significant Genera ---
+top_10_t_test <- t_test_results %>%
+  arrange(adjusted_p_value) %>%
+  slice_head(n = 10) %>%
+  select(Bacterial_Group, log2_fold_change, p_value, adjusted_p_value)
+write_tsv(top_10_t_test, "top_10_t_test_results.tsv")
+
+top_10_kruskal <- kruskal_results %>%
+  arrange(adjusted_p_value) %>%
+  slice_head(n = 10) %>%
+  select(Bacterial_Group, log2_fold_change, p_value, adjusted_p_value)
+write_tsv(top_10_kruskal, "top_10_kruskal_results.tsv")
+
+# --- Boxplots for Top 10 Genera (Kruskal-Wallis) ---
+data_top_10_kruskal <- data_filtered %>%
+  filter(Bacterial_Group %in% top_10_kruskal$Bacterial_Group)
+
+boxplots_kruskal <- ggplot(data_top_10_kruskal, aes(x = Study.Group, y = Relative_Abundance, fill = Study.Group)) +
+  geom_boxplot(outlier.size = 0.5, alpha = 0.8) +
+  facet_wrap(~ Bacterial_Group, scales = "free_y") +
+  scale_fill_manual(values = c("UC" = "#E41A1C", "CD" = "#377EB8", "nonIBD" = "#4DAF4A")) +
+  theme_minimal() +
+  labs(
+    title = "Boxplots of Top 10 Genera (Kruskal-Wallis)",
+    x = "Study Group",
+    y = "Relative Abundance",
+    fill = "Study Group"
+  ) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+print(boxplots_kruskal)
