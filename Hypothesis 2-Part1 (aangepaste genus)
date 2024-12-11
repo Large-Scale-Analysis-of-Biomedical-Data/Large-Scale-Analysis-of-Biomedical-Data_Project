@@ -20,11 +20,11 @@ lapply(required_packages, library, character.only = TRUE)
 #                          DATA LOADING AND PREPROCESSING
 # ===================================================================
 # Load genera counts data
-genera_counts_path <- "/Users/laurens/Desktop/School/UGent/Master 1/Large scale analysis/group project/genera.counts.tsv"
+genera_counts_path <- "genera.counts.tsv"
 genera_data <- read_tsv(genera_counts_path)
 
 # Load metadata
-metadata_path <- "/Users/laurens/Desktop/School/UGent/Master 1/Large scale analysis/group project/metadata.tsv"
+metadata_path <- "metadata.tsv"
 metadata <- read_tsv(metadata_path)
 
 # Load dataset (file_path1 should be defined prior to running this code)
