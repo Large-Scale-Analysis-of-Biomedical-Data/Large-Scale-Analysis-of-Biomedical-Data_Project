@@ -1,5 +1,13 @@
+---
+title: "Differential Abundance Analysis of Bacterial Genera"
+output: html_document
+date: "2024-12-11"
+---
+
 ```{r}
-# --- Install and Load Required Packages ---
+# ===================================================================
+#                    INSTALLATION AND LOADING OF PACKAGES
+# ===================================================================
 required_packages <- c(
   "readr", "dplyr", "tidyr", "ggplot2", "ggpubr", 
   "broom", "purrr", "ggrepel"
@@ -8,8 +16,10 @@ new_packages <- required_packages[!(required_packages %in% installed.packages()[
 if (length(new_packages)) install.packages(new_packages)
 lapply(required_packages, library, character.only = TRUE)
 
-# --- Load and Preprocess Data ---
-# Load genera counts
+# ===================================================================
+#                          DATA LOADING AND PREPROCESSING
+# ===================================================================
+# Load genera counts data
 genera_counts_path <- "/Users/laurens/Desktop/School/UGent/Master 1/Large scale analysis/group project/genera.counts.tsv"
 genera_data <- read_tsv(genera_counts_path)
 
@@ -17,7 +27,7 @@ genera_data <- read_tsv(genera_counts_path)
 metadata_path <- "/Users/laurens/Desktop/School/UGent/Master 1/Large scale analysis/group project/metadata.tsv"
 metadata <- read_tsv(metadata_path)
 
-# Load dataset
+# Load dataset (file_path1 should be defined prior to running this code)
 df <- read.table(file_path1, sep = "\t", header = TRUE, check.names = FALSE)
 
 # Function to extract only the genus from column names
@@ -26,16 +36,16 @@ extract_genus <- function(colname) {
     genus <- sub(".*g__([A-Za-z0-9_-]+).*", "\\1", colname)
     return(genus)
   } else if (colname == "Sample") { 
-    return("Sample") # Leave 'Sample' unchanged
+    return("Sample") # Keep 'Sample' unchanged
   } else {
     return(colname)
   }
 }
 
-# Adjust column names
+# Adjust column names by extracting genus names
 colnames(df) <- sapply(colnames(df), extract_genus)
 
-# Save the result with write_tsv()
+# Save the result
 write_tsv(as_tibble(df), "genera_only_counts.tsv")
 
 # Load the modified data
@@ -51,14 +61,18 @@ optimized_metadata <- metadata %>%
   select(Sample, Study.Group)
 write_tsv(optimized_metadata, "metadata_optimized.tsv")
 
-# --- Data Cleaning ---
+# ===================================================================
+#                          DATA CLEANING
+# ===================================================================
 # Remove missing values
 long_format_data_clean <- na.omit(long_format_data)
 optimized_metadata_clean <- na.omit(optimized_metadata)
 write_tsv(long_format_data_clean, "long_format_data_clean.tsv")
 write_tsv(optimized_metadata_clean, "optimized_metadata_clean.tsv")
 
-# --- Normalization ---
+# ===================================================================
+#                          NORMALIZATION
+# ===================================================================
 # Normalize counts to relative abundances
 long_format_data_clean_normalized <- long_format_data_clean %>%
   group_by(Sample) %>%
@@ -66,16 +80,20 @@ long_format_data_clean_normalized <- long_format_data_clean %>%
   ungroup()
 write_tsv(long_format_data_clean_normalized, "long_format_data_clean_normalized.tsv")
 
-# --- Merge Datasets ---
+# ===================================================================
+#                          MERGE DATASETS
+# ===================================================================
 merged_data <- long_format_data_clean_normalized %>%
   inner_join(optimized_metadata_clean, by = "Sample")
 
-# --- Statistical Analysis ---
-# Filter relevant groups (UC, CD, nonIBD)
+# ===================================================================
+#                          STATISTICAL ANALYSIS
+# ===================================================================
+# Filter relevant groups (UC, CD, and nonIBD)
 data_filtered <- merged_data %>%
   filter(Study.Group %in% c("UC", "CD", "nonIBD"))
 
-# Compute t-test-based fold-change, p-values, and significance
+# T-test based fold-change and significance
 t_test_results <- data_filtered %>%
   group_by(Bacterial_Group) %>%
   summarise(
@@ -91,7 +109,7 @@ t_test_results <- data_filtered %>%
     label = ifelse(significance == "Significant", Bacterial_Group, NA)
   )
 
-# Compute Kruskal-Wallis-based p-values and significance
+# Kruskal-Wallis based fold-change and significance
 kruskal_results <- data_filtered %>%
   group_by(Bacterial_Group) %>%
   summarise(
@@ -106,11 +124,24 @@ kruskal_results <- data_filtered %>%
     significance = ifelse(adjusted_p_value < 0.05 & abs(log2_fold_change) > 1, "Significant", "Not Significant")
   )
 
-# --- Volcano Plot (t-test) ---
+highlighted_genera <- c(
+  "Dorea", "Neofamilia", "Copromonas", "Ventrimonas", 
+  "Metaruminococcus", "UBA1394", "UMGS856", 
+  "GCA-002401385", "Butyribacter", "HGM13222"
+)
+
+# ===================================================================
+#                          VISUALIZATIONS
+# ===================================================================
+# Volcano Plot (T-test)
 volcano_plot_t_test <- ggplot(t_test_results, aes(x = log2_fold_change, y = -log10(adjusted_p_value), color = significance)) +
-  geom_point(alpha = 0.8, size = 3) +
+  geom_point(alpha = 0.8, size = 1.5) +
   scale_color_manual(values = c("Significant" = "red", "Not Significant" = "gray")) +
-  geom_text_repel(aes(label = label), size = 3, box.padding = 0.3, point.padding = 0.3, segment.color = "grey50") +
+  geom_text_repel(
+    data = t_test_results %>% filter(Bacterial_Group %in% highlighted_genera & significance == "Significant"),
+    aes(label = Bacterial_Group),
+    size = 3, box.padding = 0.3, point.padding = 0.3, segment.color = "grey50"
+  ) +
   theme_minimal() +
   labs(
     title = "Volcano Plot (T-test): Differential Expression of Bacterial Groups",
@@ -120,10 +151,15 @@ volcano_plot_t_test <- ggplot(t_test_results, aes(x = log2_fold_change, y = -log
   )
 print(volcano_plot_t_test)
 
-# --- Volcano Plot (Kruskal-Wallis) ---
+# Volcano Plot (Kruskal-Wallis)
 volcano_plot_kruskal <- ggplot(kruskal_results, aes(x = log2_fold_change, y = -log10(adjusted_p_value), color = significance)) +
-  geom_point(alpha = 0.8, size = 3) +
+  geom_point(alpha = 0.8, size = 1.5) +
   scale_color_manual(values = c("Significant" = "blue", "Not Significant" = "gray")) +
+  geom_text_repel(
+    data = kruskal_results %>% filter(Bacterial_Group %in% highlighted_genera & significance == "Significant"),
+    aes(label = Bacterial_Group),
+    size = 3, box.padding = 0.3, point.padding = 0.3, segment.color = "grey50"
+  ) +
   theme_minimal() +
   labs(
     title = "Volcano Plot (Kruskal-Wallis): Differential Expression of Bacterial Groups",
@@ -133,7 +169,9 @@ volcano_plot_kruskal <- ggplot(kruskal_results, aes(x = log2_fold_change, y = -l
   )
 print(volcano_plot_kruskal)
 
-# --- Identify Top 10 Significant Genera ---
+# ===================================================================
+#                           TOP 10 GENERA
+# ===================================================================
 top_10_t_test <- t_test_results %>%
   arrange(adjusted_p_value) %>%
   slice_head(n = 10) %>%
@@ -146,7 +184,9 @@ top_10_kruskal <- kruskal_results %>%
   select(Bacterial_Group, log2_fold_change, p_value, adjusted_p_value)
 write_tsv(top_10_kruskal, "top_10_kruskal_results.tsv")
 
-# --- Boxplots for Top 10 Genera (Kruskal-Wallis) ---
+# ===================================================================
+#                  BOX PLOTS FOR TOP 10 GENERA (KRUSKAL-WALLIS)
+# ===================================================================
 data_top_10_kruskal <- data_filtered %>%
   filter(Bacterial_Group %in% top_10_kruskal$Bacterial_Group)
 
@@ -163,3 +203,4 @@ boxplots_kruskal <- ggplot(data_top_10_kruskal, aes(x = Study.Group, y = Relativ
   ) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 print(boxplots_kruskal)
+
