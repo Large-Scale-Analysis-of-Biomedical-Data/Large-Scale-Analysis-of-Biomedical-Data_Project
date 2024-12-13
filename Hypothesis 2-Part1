@@ -33,6 +33,34 @@ optimized_metadata_clean <- na.omit(optimized_metadata)
 write_tsv(long_format_data_clean, "long_format_data_clean.tsv")
 write_tsv(optimized_metadata_clean, "optimized_metadata_clean.tsv")
 
+# --- Histogram to Check Normal Distribution ---
+histogram <- ggplot(long_format_data, aes(x = Count)) +
+  geom_histogram(bins = 50, fill = "steelblue", color = "black", alpha = 0.7) +
+  theme_minimal() +
+  labs(
+    title = "Histogram of Bacterial Counts",
+    x = "Bacterial Counts",
+    y = "Frequency"
+  )
+print(histogram)
+
+# Add a small constant to avoid log(0)
+genera_data_long <- long_format_data_clean %>% mutate(Count_log = log10(Count + 1))
+
+# Plot histogram of log-transformed data
+histogram_log <- ggplot(genera_data_long, aes(x = Count_log)) +
+  geom_histogram(bins = 50, fill = "steelblue", color = "black", alpha = 0.7) +
+  theme_minimal() +
+  labs(
+    title = "Histogram of Log-Transformed Bacterial Counts",
+    x = "Log10(Bacterial Counts + 1)",
+    y = "Frequency"
+  )
+print(histogram_log)
+
+# Inspect summary statistics to better understand the range and skewness
+summary(long_format_data_clean$Count)
+
 # --- Normalization ---
 # Normalize counts to relative abundances
 long_format_data_clean_normalized <- long_format_data_clean %>%
