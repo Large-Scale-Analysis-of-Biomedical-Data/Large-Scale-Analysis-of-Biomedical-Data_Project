@@ -17,6 +17,39 @@ genera_data <- read_tsv(genera_counts_path)
 metadata_path <- "metadata.tsv"
 metadata <- read_tsv(metadata_path)
 
+
+
+
+
+# Load dataset (file_path1 should be defined)
+df <- read.table(file_path1, sep = "\t", header = TRUE, check.names = FALSE)
+
+# Extract only the genus from column names
+extract_genus <- function(colname) {
+  if (grepl("g__", colname)) {
+    genus <- sub(".*g__([A-Za-z0-9_-]+).*", "\\1", colname)
+    return(genus)
+  } else if (colname == "Sample") { 
+    return("Sample")
+  } else {
+    return(colname)
+  }
+}
+
+colnames(df) <- sapply(colnames(df), extract_genus)
+write_tsv(as_tibble(df), "genera_only_counts.tsv")
+
+genera_data <- read_tsv("genera_only_counts.tsv")
+
+
+
+
+
+
+
+
+
+
 # Transform genera data to long format
 long_format_data <- genera_data %>%
   pivot_longer(cols = -Sample, names_to = "Bacterial_Group", values_to = "Count")
@@ -109,6 +142,21 @@ kruskal_results <- data_filtered %>%
     adjusted_p_value = p.adjust(p_value, method = "BH"),
     significance = ifelse(adjusted_p_value < 0.05 & abs(log2_fold_change) > 1, "Significant", "Not Significant")
   )
+
+
+
+
+  highlighted_genera <- c(
+  "Dorea", "Neofamilia", "Copromonas", "Ventrimonas", 
+  "Metaruminococcus", "UBA1394", "UMGS856", 
+  "GCA-002401385", "Butyribacter", "HGM13222"
+)
+
+  
+
+
+
+
 
 # --- Volcano Plot (t-test) ---
 volcano_plot_t_test <- ggplot(t_test_results, aes(x = log2_fold_change, y = -log10(adjusted_p_value), color = significance)) +
