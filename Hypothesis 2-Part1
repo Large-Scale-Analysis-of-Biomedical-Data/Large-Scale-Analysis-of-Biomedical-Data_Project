@@ -130,20 +130,11 @@ kruskal_results <- data_filtered %>%
     significance = ifelse(adjusted_p_value < 0.05 & abs(log2_fold_change) > 1, "Significant", "Not Significant")
   )
 
-
-
-
   highlighted_genera <- c(
   "Dorea", "Neofamilia", "Copromonas", "Ventrimonas", 
   "Metaruminococcus", "UBA1394", "UMGS856", 
   "GCA-002401385", "Butyribacter", "HGM13222"
 )
-
-  
-
-
-
-
 
 # --- Volcano Plot (t-test) ---
 volcano_plot_t_test <- ggplot(t_test_results, aes(x = log2_fold_change, y = -log10(adjusted_p_value), color = significance)) +
@@ -184,6 +175,7 @@ top_10_kruskal <- kruskal_results %>%
   slice_head(n = 10) %>%
   select(Bacterial_Group, log2_fold_change, p_value, adjusted_p_value)
 write_tsv(top_10_kruskal, "top_10_kruskal_results.tsv")
+print(top_10_kruskal)
 
 # --- Boxplots for Top 10 Genera (Kruskal-Wallis) ---
 data_top_10_kruskal <- data_filtered %>%
