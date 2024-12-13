@@ -1,0 +1,264 @@
+# Install and load packages
+required_packages <- c("readr", "dplyr", "corrplot", "ggplot2", "tidyr", "skimr", "gridExtra", "patchwork", "car", "ggcorrplot")
+
+new_packages <- required_packages[!(required_packages %in% installed.packages()[, "Package"])]
+if (length(new_packages) > 0) {
+  install.packages(new_packages)
+}
+
+library(readr)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(skimr)
+library(gridExtra)
+library(patchwork)
+library(car)
+library(ggcorrplot)
+
+# Read the metadata file
+file_path2 <- "/Users/laurens/Desktop/School/UGent/Master 1/Large scale analysis/group project/metadata.tsv"
+metadata <- read_tsv(file_path2)
+
+# Initial exploration
+head(metadata)
+summary(metadata)
+dim(metadata)
+skim(metadata)
+
+# Rename columns
+colnames(metadata)[colnames(metadata) == "Age at diagnosis"] <- "Age_at_diagnosis"
+colnames(metadata)[colnames(metadata) == "smoking status"] <- "Smoking_status"
+colnames(metadata)
+
+# Check for duplicates
+duplicates <- metadata[duplicated(metadata), ]
+if (nrow(duplicates) > 0) {
+  print("Duplicate rows found:")
+  print(duplicates)
+} else {
+  print("No duplicate rows found.")
+}
+
+# Convert categorical variables to factors
+metadata <- metadata %>%
+  mutate(
+    Gender = as.factor(Gender),
+    Study.Group = as.factor(Study.Group),
+    site_name = as.factor(site_name),
+    Antibiotics = as.factor(Antibiotics),
+    race = as.factor(race),
+    Smoking_status = as.factor(Smoking_status)
+  )
+
+# Missing data analysis
+na_summary <- tibble(
+  Column = colnames(metadata),
+  Total_NA = colSums(is.na(metadata)),
+  Percentage_NA = colSums(is.na(metadata)) / nrow(metadata) * 100
+) %>%
+  arrange(desc(Percentage_NA))
+na_summary
+
+# Missing data visualization
+missing_data <- metadata %>%
+  summarise(across(everything(), ~ sum(is.na(.)) / n() * 100)) %>%
+  pivot_longer(cols = everything(), names_to = "Variable", values_to = "MissingPercentage") %>%
+  arrange(desc(MissingPercentage))
+
+ggplot(missing_data, aes(x = reorder(Variable, MissingPercentage), y = MissingPercentage)) +
+  geom_bar(stat = "identity", fill = "skyblue", color = "black") +
+  geom_text(aes(label = paste0(round(MissingPercentage, 1), "%")), hjust = -0.1, size = 4) +
+  coord_flip() +
+  labs(title = "Percentage of Missing Values by Variable",
+       x = "Variables",
+       y = "Percentage Missing") +
+  theme_minimal()
+
+# Histograms and bar charts
+plot1 <- ggplot(metadata, aes(x = BMI_at_baseline)) +
+  geom_histogram(binwidth = 2, fill = "skyblue", color = "black") +
+  labs(title = "BMI at Baseline Distribution",
+       x = "BMI at Baseline (kg/m²)",
+       y = "Frequency") +
+  theme_minimal()
+
+plot2 <- ggplot(metadata, aes(x = fecalcal)) +
+  geom_histogram(binwidth = 10, fill = "orange", color = "black") +
+  labs(title = "Fecal Calprotectin Distribution",
+       x = "Fecal Calprotectin (µg/g)",
+       y = "Frequency") +
+  theme_minimal()
+
+plot3 <- ggplot(metadata, aes(x = Gender)) +
+  geom_bar(fill = "lightgreen", color = "black") +
+  labs(title = "Gender Distribution",
+       x = "Gender",
+       y = "Count") +
+  theme_minimal()
+
+plot4 <- ggplot(metadata, aes(x = race)) +
+  geom_bar(fill = "lightcoral", color = "black") +
+  labs(title = "Race Distribution",
+       x = "Race",
+       y = "Count") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 6)) +
+  scale_x_discrete(labels = function(x) stringr::str_wrap(x, width = 10))
+
+grid.arrange(plot1, plot2, plot3, plot4, ncol = 2)
+
+# Relationship between age and BMI by gender
+metadata %>%
+  ggplot(aes(x = consent_age, y = BMI_at_baseline, color = Gender)) +
+  geom_point(alpha = 0.7) +
+  labs(title = "Relationship Between Age and BMI by Gender",
+       x = "Age",
+       y = "BMI")
+
+# Log transformation of fecalcal
+metadata$fecalcal_log <- log(metadata$fecalcal + 1)
+
+plot_orig <- ggplot(metadata, aes(x = fecalcal)) +
+  geom_histogram(binwidth = 10, fill = "orange", color = "black") +
+  labs(title = "Original Distribution",
+       x = "Fecal Calprotectin (µg/g)",
+       y = "Frequency") +
+  theme_minimal()
+
+plot_log <- ggplot(metadata, aes(x = fecalcal_log)) +
+  geom_histogram(binwidth = 0.1, fill = "blue", color = "black") +
+  labs(title = "Log-Transformed Distribution",
+       x = "Log(Fecal Calprotectin + 1)",
+       y = "Frequency") +
+  theme_minimal()
+
+plot_orig + plot_log
+
+# Boxplots with outliers
+plot_bmi_outliers <- ggplot(metadata, aes(y = BMI_at_baseline)) +
+  geom_boxplot(fill = "skyblue", color = "black") +
+  labs(title = "BMI at Baseline (With Outliers)",
+       y = "BMI (kg/m²)") +
+  theme_minimal()
+
+plot_fecalcal <- ggplot(metadata, aes(y = fecalcal)) +
+  geom_boxplot(fill = "orange", color = "black") +
+  labs(title = "Outliers in Fecal Calprotectin", y = "Fecal Calprotectin (µg/g)") +
+  theme_minimal()
+
+combined_plot_side_by_side <- plot_bmi_outliers | plot_fecalcal 
+combined_plot_side_by_side
+
+# Remove outliers in BMI
+Q1 <- quantile(metadata$BMI_at_baseline, 0.25, na.rm = TRUE)
+Q3 <- quantile(metadata$BMI_at_baseline, 0.75, na.rm = TRUE)
+IQR <- Q3 - Q1
+lower_bound <- Q1 - 1.5 * IQR
+upper_bound <- Q3 + 1.5 * IQR
+
+metadata <- metadata %>%
+  filter(BMI_at_baseline >= lower_bound & BMI_at_baseline <= upper_bound)
+
+summary(metadata$BMI_at_baseline)
+
+# Boxplot without outliers
+plot_bmi_no_outliers <- ggplot(metadata, aes(y = BMI_at_baseline)) +
+  geom_boxplot(fill = "skyblue", color = "black") +
+  labs(title = "BMI at Baseline (Without Outliers)",
+       y = "BMI (kg/m²)") +
+  theme_minimal()
+
+plot_bmi_no_outliers
+
+# Correlation matrix
+numeric_vars <- sapply(metadata, is.numeric)
+cor_matrix <- cor(metadata[, numeric_vars], use = "pairwise.complete.obs")
+
+ggcorrplot(cor_matrix,
+           lab = FALSE,
+           title = "Correlation Matrix for Numeric Variables",
+           outline.col = "white",
+           colors = c("blue", "white", "red"))
+
+# Log transform fecalcal (again, if needed)
+metadata$fecalcal_log <- log(metadata$fecalcal + 1)
+
+plot_orig <- ggplot(metadata, aes(x = fecalcal)) +
+  geom_histogram(binwidth = 10, fill = "orange", color = "black") +
+  labs(title = "Original Distribution",
+       x = "Fecal Calprotectin (µg/g)",
+       y = "Frequency") +
+  theme_minimal()
+
+plot_log <- ggplot(metadata, aes(x = fecalcal_log)) +
+  geom_histogram(binwidth = 0.1, fill = "blue", color = "black") +
+  labs(title = "Log-Transformed Distribution",
+       x = "Log(Fecal Calprotectin + 1)",
+       y = "Frequency") +
+  theme_minimal()
+
+plot_orig + plot_log
+
+# Boxplots by Study.Group and race, and Scatterplot of Fecalcal vs BMI
+plot_study_group <- ggplot(metadata, aes(x = Study.Group, y = fecalcal, fill = Study.Group)) +
+  geom_boxplot(alpha = 0.7) +
+  labs(title = "Fecal Calprotectin Levels Across Study Groups",
+       x = "Study Group",
+       y = "Fecal Calprotectin (µg/g)") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+plot_race <- ggplot(metadata, aes(x = race, y = fecalcal, fill = race)) +
+  geom_boxplot(alpha = 0.7) +
+  labs(
+    title = "Fecal Calprotectin Levels by Race Category",
+    x = "Race Category",
+    y = "Fecal Calprotectin (µg/g)"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "none",
+    axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)
+  )
+
+plot_bmi <- ggplot(metadata, aes(x = BMI_at_baseline, y = fecalcal)) +
+  geom_point(color = "skyblue") +
+  labs(title = "Fecalcal vs BMI at Baseline",
+       x = "BMI at Baseline (kg/m²)",
+       y = "Fecal Calprotectin (µg/g)") +
+  theme_minimal()
+
+print(plot_study_group)
+print(plot_race)
+print(plot_bmi)
+
+# Q-Q plots for residuals (original and log-transformed)
+model <- aov(fecalcal ~ BMI_at_baseline + Gender + race + Study.Group, data = metadata)
+
+par(mfrow = c(1, 2))
+qqnorm(residuals(model), main = "Q-Q plot of original data ")
+qqline(residuals(model), col = "red")
+qqnorm(metadata$fecalcal_log, main = "Q-Q Plot of log-transformed data ")
+qqline(metadata$fecalcal_log, col = "red")
+
+# Levene's test for homogeneity of variances
+levene_study_group <- leveneTest(fecalcal ~ Study.Group, data = metadata)
+levene_gender <- leveneTest(fecalcal ~ Gender, data = metadata)
+levene_smoking <- leveneTest(fecalcal ~ Smoking_status, data = metadata)
+
+levene_study_group
+levene_gender
+levene_smoking
+
+# ANOVA and normality of residuals
+multivariate_model_aov <- aov(fecalcal ~ BMI_at_baseline + Smoking_status + Gender + Study.Group, data = metadata)
+residuals_aov <- residuals(multivariate_model_aov)
+shapiro.test(residuals_aov)
+
+# GLM with Gamma and log link
+glm_model <- glm(fecalcal ~ BMI_at_baseline + Gender + Study.Group + race,
+                 family = Gamma(link = "log"),
+                 data = metadata)
+summary(glm_model)
+
