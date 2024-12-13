@@ -1,3 +1,4 @@
+```{r}
 # --- Install and Load Required Packages ---
 required_packages <- c(
   "readr", "dplyr", "tidyr", "ggplot2", "ggpubr", 
