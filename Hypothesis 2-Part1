@@ -17,9 +17,10 @@ genera_data <- read_tsv(genera_counts_path)
 metadata_path <- "metadata.tsv"
 metadata <- read_tsv(metadata_path)
 
-
-
-
+# Transform genera data to long format
+long_format_data <- genera_data %>%
+  pivot_longer(cols = -Sample, names_to = "Bacterial_Group", values_to = "Count")
+write_tsv(long_format_data, "genera_counts_long_format.tsv")
 
 # Load dataset (file_path1 should be defined)
 df <- read.table(file_path1, sep = "\t", header = TRUE, check.names = FALSE)
@@ -40,20 +41,6 @@ colnames(df) <- sapply(colnames(df), extract_genus)
 write_tsv(as_tibble(df), "genera_only_counts.tsv")
 
 genera_data <- read_tsv("genera_only_counts.tsv")
-
-
-
-
-
-
-
-
-
-
-# Transform genera data to long format
-long_format_data <- genera_data %>%
-  pivot_longer(cols = -Sample, names_to = "Bacterial_Group", values_to = "Count")
-write_tsv(long_format_data, "genera_counts_long_format.tsv")
 
 # Optimize metadata by selecting relevant columns
 optimized_metadata <- metadata %>%
