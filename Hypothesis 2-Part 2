@@ -10,23 +10,11 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import plot_confusion_matrix
 
 # Step 1: Load the bacterial count data and metadata
-bacterial_counts = pd.read_csv('/kaggle/input/ibs-optimized/genera_counts_long_format.tsv', sep='\t')
-metadata = pd.read_csv('/kaggle/input/ibs-optimized/metadata_optimized.tsv', sep='\t')
-
-
-
-# Normalize counts to relative abundances
-bacterial_counts_normalized = bacterial_counts.groupby('Sample').apply(
-    lambda x: x.assign(Relative_Abundance=x['Count'] / x['Count'].sum())
-).reset_index(drop=True)
-
-
-
-
-
+bacterial_counts = pd.read_csv('/kaggle/input/ibs-optimized/long_format_data_clean_normalized.tsv', sep='\t')
+metadata = pd.read_csv('/kaggle/input/ibs-optimized/optimized_metadata_clean.tsv', sep='\t')
 
 # Step 2: Merge the datasets on 'Sample'
-data = pd.merge(bacterial_counts_normalized, metadata, on='Sample')
+data = pd.merge(bacterial_counts, metadata, on='Sample')
 
 # Step 3: Prepare the data for classification
 X = data.drop(columns=['Sample', 'IBD_Status'])
