@@ -14,11 +14,11 @@ bacterial_counts = pd.read_csv('/kaggle/input/ibs-optimized/genera_counts_long_f
 metadata = pd.read_csv('/kaggle/input/ibs-optimized/metadata_optimized.tsv', sep='\t')
 
 
+
 # Normalize counts to relative abundances
-bacterial_counts_normalized <- bacterial_counts %>%
-  group_by(Sample) %>%
-  mutate(Relative_Abundance = Count / sum(Count, na.rm = TRUE)) %>%
-  ungroup()
+bacterial_counts_normalized = bacterial_counts.groupby('Sample').apply(
+    lambda x: x.assign(Relative_Abundance=x['Count'] / x['Count'].sum())
+).reset_index(drop=True)
 
 
 
