@@ -13,8 +13,20 @@ from sklearn.metrics import plot_confusion_matrix
 bacterial_counts = pd.read_csv('/kaggle/input/ibs-optimized/genera_counts_long_format.tsv', sep='\t')
 metadata = pd.read_csv('/kaggle/input/ibs-optimized/metadata_optimized.tsv', sep='\t')
 
+
+# Normalize counts to relative abundances
+bacterial_counts_normalized <- bacterial_counts %>%
+  group_by(Sample) %>%
+  mutate(Relative_Abundance = Count / sum(Count, na.rm = TRUE)) %>%
+  ungroup()
+
+
+
+
+
+
 # Step 2: Merge the datasets on 'Sample'
-data = pd.merge(bacterial_counts, metadata, on='Sample')
+data = pd.merge(bacterial_counts_normalized, metadata, on='Sample')
 
 # Step 3: Prepare the data for classification
 X = data.drop(columns=['Sample', 'IBD_Status'])
