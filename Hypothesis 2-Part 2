@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import plot_confusion_matrix
 
 # Step 1: Load the bacterial count data and metadata
-bacterial_counts = pd.read_csv('/kaggle/input/ibs-optimized/long_format_data_clean_normalized.tsv', sep='\t')
+bacterial_counts = pd.read_csv('/kaggle/input/ibs-optimized/long_format_data_clean.tsv', sep='\t')
 metadata = pd.read_csv('/kaggle/input/ibs-optimized/optimized_metadata_clean.tsv', sep='\t')
 
 # Step 2: Merge the datasets on 'Sample'
