@@ -193,3 +193,31 @@ boxplots_kruskal <- ggplot(data_top_10_kruskal, aes(x = Study.Group, y = Relativ
   ) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 print(boxplots_kruskal)
+
+# This code creates a bar plot showing the top 10 bacterial genera based on Log2 Fold-Change values.  
+# Bars are colored based on positive (blue) or negative (red) fold-change, and exact values are displayed as labels.
+
+bar_plot <- ggplot(top_10_ordered, aes(x = log2_fold_change, 
+                                      y = Bacterial_Group, 
+                                      fill = log2_fold_change > 0)) +
+  geom_col() +
+  geom_text(aes(label = round(log2_fold_change, 2)), 
+            hjust = ifelse(top_10_ordered$log2_fold_change > 0, -0.2, 1.2), 
+            size = 3, color = "black") +
+  scale_fill_manual(values = c("TRUE" = "blue", "FALSE" = "red")) +
+  scale_x_continuous(breaks = seq(-2, 2, by = 0.2)) +
+  labs(
+    title = "Top 10 Genera by Log2 Fold-Change",
+    subtitle = "UC/CD vs non-IBD comparison with exact values",
+    x = "Log2 Fold-Change (UC/CD vs non-IBD)",
+    y = "Bacterial Genus",
+    fill = "Enriched?"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "none",
+    axis.text.y = element_text(size = 10),
+    axis.text.x = element_text(size = 10)
+  )
+
+print(bar_plot)
